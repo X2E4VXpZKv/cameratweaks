@@ -26,6 +26,7 @@
     <Reference Include="Assembly-CSharp"></Reference>
     <Reference Include="UnityEngine"></Reference>
     <Reference Include="UnityEngine.CoreModule"></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"></Reference>
   </ItemGroup>
   
 </Project>

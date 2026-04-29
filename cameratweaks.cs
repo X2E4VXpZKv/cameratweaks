@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using System.Reflection.Emit;
 using UnityEngine;
+using System;
 
 namespace cameratweaks;
 
@@ -21,6 +22,7 @@ public class Plugin : BaseUnityPlugin {
 
         harmony.PatchAll(typeof(AccelPatches));
         harmony.PatchAll(typeof(SmoothingPatches));
+        harmony.PatchAll(typeof(RightClickPatches));
 
         Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
     }
@@ -33,10 +35,36 @@ public class Plugin : BaseUnityPlugin {
     //    __instance.disableFov = true;
     // }
 
-    static void LogInstructions(IEnumerable<CodeInstruction> instructions) {
+    public static void LogInstructions(IEnumerable<CodeInstruction> instructions) {
         foreach (CodeInstruction instruction in instructions) {
             Logger.LogWarning($"{instruction.opcode} {instruction.operand}");
         }
+    }
+}
+
+public class RightClickPatches {
+    static Vector3 dragBeginMousePosition;
+
+    [HarmonyReversePatch, HarmonyPatch(typeof(VFInput), "rtsCancel", MethodType.Getter)]
+    static VFInput.InputValue RtsCancelOriginal() {
+        throw new NotImplementedException();
+    }
+    [HarmonyPrefix, HarmonyPatch(typeof(VFInput), "rtsCancel", MethodType.Getter)]
+    static bool RtsCancelPatch(ref VFInput.InputValue __result) {
+        __result = RtsCancelOriginal();
+        
+        bool cameraConflict = !VFInput.override_keys[48].IsNull() && VFInput.override_keys[48].keyCode - 323 == 1;
+        bool dragCanceledUp = __result.onUp && (dragBeginMousePosition - Input.mousePosition).sqrMagnitude < 64f;
+
+        if (cameraConflict) {
+            __result.onDown = dragCanceledUp;
+            __result.onUp = dragCanceledUp;
+        }
+        return false;
+    }
+    [HarmonyPostfix, HarmonyPatch(typeof(PlayerController), "GameTick")]
+    static void GameTick() {
+        if (RtsCancelOriginal().onDown) dragBeginMousePosition = Input.mousePosition;
     }
 }
 
