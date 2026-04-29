@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>cameratweaks</AssemblyName>
+    <Product>cameratweaks</Product>
+    <Version>1.0.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>cameratweaks</RootNamespace>
+
+    <RestoreAdditionalProjectSources>
+      https://nuget.bepinex.dev/v3/index.json;
+    </RestoreAdditionalProjectSources>
+    <AssemblySearchPaths>
+      $(AssemblySearchPaths);
+      $(gamepath)/DSPGAME_Data/Managed
+    </AssemblySearchPaths>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.*" />
+
+    <Reference Include="Assembly-CSharp"></Reference>
+    <Reference Include="UnityEngine"></Reference>
+    <Reference Include="UnityEngine.CoreModule"></Reference>
+  </ItemGroup>
+  
+</Project>
