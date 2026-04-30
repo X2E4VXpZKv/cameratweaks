@@ -4,7 +4,6 @@ using BepInEx.Logging;
 using HarmonyLib;
 using System.Reflection.Emit;
 using UnityEngine;
-using System;
 
 namespace cameratweaks;
 
@@ -45,26 +44,71 @@ public class Plugin : BaseUnityPlugin {
 public class RightClickPatches {
     static Vector3 dragBeginMousePosition;
 
-    [HarmonyReversePatch, HarmonyPatch(typeof(VFInput), "rtsCancel", MethodType.Getter)]
-    static VFInput.InputValue RtsCancelOriginal() {
-        throw new NotImplementedException();
-    }
-    [HarmonyPrefix, HarmonyPatch(typeof(VFInput), "rtsCancel", MethodType.Getter)]
-    static bool RtsCancelPatch(ref VFInput.InputValue __result) {
-        __result = RtsCancelOriginal();
-        
+    static bool DragCanceledRtsCancel() {
         bool cameraConflict = !VFInput.override_keys[48].IsNull() && VFInput.override_keys[48].keyCode - 323 == 1;
-        bool dragCanceledUp = __result.onUp && (dragBeginMousePosition - Input.mousePosition).sqrMagnitude < 64f;
+        bool dragCanceledUp = VFInput.rtsCancel.onUp && (dragBeginMousePosition - Input.mousePosition).sqrMagnitude < 64f;
 
-        if (cameraConflict) {
-            __result.onDown = dragCanceledUp;
-            __result.onUp = dragCanceledUp;
-        }
-        return false;
+        return cameraConflict ? dragCanceledUp : VFInput.rtsCancel.onDown;
     }
     [HarmonyPostfix, HarmonyPatch(typeof(PlayerController), "GameTick")]
     static void GameTick() {
-        if (RtsCancelOriginal().onDown) dragBeginMousePosition = Input.mousePosition;
+        if (VFInput.rtsCancel.onDown) dragBeginMousePosition = Input.mousePosition;
+    }
+    [HarmonyTranspiler]
+    [HarmonyPatch(typeof(PlayerAction_Build), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Click), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Path), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Addon), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Inserter), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Reform), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Upgrade), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_Dismantle), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_BlueprintCopy), "EscLogic")]
+    [HarmonyPatch(typeof(BuildTool_BlueprintPaste), "EscLogic")]
+    [HarmonyPatch(typeof(PlayerAction_Plant), "EscLogic")]
+    [HarmonyPatch(typeof(PlayerAction_Combat), "GameTickShieldBurst")]
+    static IEnumerable<CodeInstruction> OnDownPatch(IEnumerable<CodeInstruction> instructions) {
+        CodeMatcher matcher = new CodeMatcher(instructions);
+        
+        matcher.MatchForward(false, new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(VFInput), "get_rtsCancel")));
+        matcher.SetOperandAndAdvance(SymbolExtensions.GetMethodInfo(() => DragCanceledRtsCancel()));
+        matcher.RemoveInstruction();
+
+        return matcher.InstructionEnumeration();
+    }
+    [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_BlueprintCopy), "Operating")]
+    static IEnumerable<CodeInstruction> BlueprintPatch(IEnumerable<CodeInstruction> instructions) {
+        CodeMatcher matcher = new CodeMatcher(instructions);
+
+        // subtraction mode start
+        matcher.MatchForward(false,
+            new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(VFInput), "get_rtsCancel")),
+            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(VFInput.InputValue), "onDown"))
+        );
+        matcher.SetOperandAndAdvance(SymbolExtensions.GetMethodInfo(() => DragCanceledRtsCancel()));
+        matcher.RemoveInstruction();
+
+        // addition mode cancel
+        matcher.MatchForward(false,
+            new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(VFInput), "get_rtsCancel")),
+            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(VFInput.InputValue), "onUp"))
+        );
+        matcher.SetOperandAndAdvance(SymbolExtensions.GetMethodInfo(() => DragCanceledRtsCancel()));
+        matcher.RemoveInstruction();
+
+        // insert usemouseright so you cancel first selection without exiting
+        matcher.MatchForward(false, new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(BuildTool_BlueprintCopy), "DeterminePreviews")));
+        matcher.Insert(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(VFInput), "UseMouseRight")));
+
+        // subtraction mode cancel
+        matcher.MatchForward(false,
+            new CodeMatch(OpCodes.Call, AccessTools.Method(typeof(VFInput), "get_rtsCancel")),
+            new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(VFInput.InputValue), "onDown"))
+        );
+        matcher.SetOperandAndAdvance(SymbolExtensions.GetMethodInfo(() => DragCanceledRtsCancel()));
+        matcher.RemoveInstruction();
+        
+        return matcher.InstructionEnumeration();
     }
 }
 
